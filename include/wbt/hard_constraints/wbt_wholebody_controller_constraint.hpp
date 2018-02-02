@@ -23,6 +23,7 @@ public:
 	WholeBody_Task_List* wb_task_list;
 	Contact_List* contact_list;
 
+	sejong::Matrix A_int;
 	sejong::Matrix B_int;
 	sejong::Vector c_int;
 
@@ -35,6 +36,8 @@ public:
 	int task_dim;
 	int contact_dim;	
 
+	float torque_limit;
+
 	void set_task_list(WholeBody_Task_List* wb_task_list_input);
 	void set_contact_list(Contact_List* contact_list_input);
 	std::string constraint_name = "WBC constraint";
@@ -46,13 +49,25 @@ public:
 	void test_function();
 	void test_function2(const sejong::Vector &q, const sejong::Vector &qdot, sejong::Matrix &B_out, sejong::Vector &c_out);
 
+	void evaluate_constraint(const int &timestep, WBT_Opt_Variable_List& var_list, std::vector<double>& F_vec);
+	void evaluate_sparse_gradient(const int &timestep, WBT_Opt_Variable_List& var_list, std::vector<double>& G, std::vector<int>& iG, std::vector<int>& jG);
+	void evaluate_sparse_A_matrix(const int &timestep, WBT_Opt_Variable_List& var_list, std::vector<double>& A, std::vector<int>& iA, std::vector<int>& jA);
+
+
 private:
 	void Initialization();
+	void initialize_Flow_Fupp();
+
+	void UpdateModel(const sejong::Vector &q, const sejong::Vector &qdot,
+                      sejong::Matrix &A_out, sejong::Vector &grav_out, sejong::Vector &cori_out);
+
 	void _WeightedInverse(const sejong::Matrix & J, const sejong::Matrix & Winv, sejong::Matrix & Jinv){
 	    sejong::Matrix lambda(J* Winv * J.transpose());
 	    sejong::Matrix lambda_inv;
 	    sejong::pseudoInverse(lambda, 0.0001, lambda_inv);
 	    Jinv = Winv * J.transpose() * lambda_inv;
 	  }
+
+	 int last_timestep_model_update = -1;
 };
 #endif

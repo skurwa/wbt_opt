@@ -24,6 +24,8 @@ Wholebody_Controller_Constraint::~Wholebody_Controller_Constraint(){
 
 void Wholebody_Controller_Constraint::Initialization(){
   robot_model = RobotModel::GetRobotModel();	
+  A_int.resize(NUM_QDOT, NUM_QDOT);
+
   Sv.resize(NUM_VIRTUAL, NUM_QDOT);
   Sa.resize(NUM_ACT_JOINT, NUM_QDOT);
   Sv.setZero();
@@ -31,7 +33,24 @@ void Wholebody_Controller_Constraint::Initialization(){
 
   Sv.block(0,0, NUM_VIRTUAL, NUM_VIRTUAL) = sejong::Matrix::Identity(NUM_VIRTUAL, NUM_VIRTUAL);
   Sa.block(0, NUM_VIRTUAL, NUM_ACT_JOINT, NUM_ACT_JOINT) = sejong::Matrix::Identity(NUM_ACT_JOINT, NUM_ACT_JOINT);
+  torque_limit = 1800;
 
+  initialize_Flow_Fupp();
+}
+
+void Wholebody_Controller_Constraint::initialize_Flow_Fupp(){
+  // WBC Virtual Torque Constraints
+  for(size_t i = 0; i < NUM_VIRTUAL; i++){
+    F_low.push_back(0.0);
+    F_upp.push_back(0.0);        
+  }
+  // WBC Torque Limit Constraints
+  for (size_t i = 0; i < NUM_QDOT-NUM_VIRTUAL; i++){
+    F_low.push_back(-torque_limit);
+    F_upp.push_back(torque_limit);    
+  }
+  constraint_size = F_low.size();
+  //std::cout << "Size of (Flow, Fupp): (" << F_low.size() << ", " << F_upp.size() << ")" << std::endl;
 }
 
 void Wholebody_Controller_Constraint::set_task_list(WholeBody_Task_List* wb_task_list_input){
@@ -70,9 +89,24 @@ void Wholebody_Controller_Constraint::test_function(){
 }
 
 void Wholebody_Controller_Constraint::test_function2(const sejong::Vector &q, const sejong::Vector &qdot, sejong::Matrix &B_out, sejong::Vector &c_out){
-	getB_c(q, qdot, B_out, c_out);	
 	get_Jc(q, Jc_int);
 	sejong::pretty_print(Jc_int, std::cout, "WBDC: Jc_int");
+}
+
+
+void Wholebody_Controller_Constraint::UpdateModel(const sejong::Vector &q, const sejong::Vector &qdot,
+                                                  sejong::Matrix &A_out, sejong::Vector &grav_out, sejong::Vector &cori_out){
+  A_out.resize(NUM_QDOT, NUM_QDOT);
+  grav_out.resize(NUM_QDOT, 1);
+  cori_out.resize(NUM_QDOT, 1);
+  A_out.setZero();
+  grav_out.setZero();
+  cori_out.setZero();  
+
+  robot_model->UpdateModel(q, qdot);
+  robot_model->getMassInertia(A_out); 
+  robot_model->getGravity(grav_out);  
+  robot_model->getCoriolis(cori_out); 
 }
 
 void Wholebody_Controller_Constraint::getB_c(const sejong::Vector &q, const sejong::Vector &qdot, sejong::Matrix &B_out, sejong::Vector &c_out){
@@ -90,7 +124,7 @@ void Wholebody_Controller_Constraint::getB_c(const sejong::Vector &q, const sejo
 
   int tot_task_size(0);
 
-  robot_model->UpdateModel(q, qdot); // Update Model. This call should be moved so that it's only called once.
+  //robot_model->UpdateModel(q, qdot); // Update Model. This call should be moved so that it's only called once.
   robot_model->getInverseMassInertia(Ainv);
   task->getTaskJacobian(q, Jt);
   task->getTaskJacobianDotQdot(q, qdot, JtDotQdot);
@@ -155,12 +189,192 @@ void Wholebody_Controller_Constraint::get_Jc(const sejong::Vector &q, sejong::Ma
   Jc_out = Jc;
 }
 
-/*
+void Wholebody_Controller_Constraint::evaluate_constraint(const int &timestep, WBT_Opt_Variable_List& var_list, std::vector<double>& F_vec){
+  sejong::Vector q_state;
+  sejong::Vector qdot_state;
+  sejong::Vector xddot_des;
+  sejong::Vector Fr;
 
-get states q, qdot
-get xddot task accelerations
-get Fr reaction Force
+  var_list.get_var_states(timestep, q_state, qdot_state);
+  var_list.get_task_accelerations(timestep, xddot_des);
+  var_list.get_var_reaction_forces(timestep, Fr);
 
-qddot = Bxddot + c
-Aqddot + b + g - Jc^T *Fr */
+  std::cout << "    WBC evaluating constraint" << std::endl;
 
+  sejong::Vector g(NUM_QDOT, 1);
+  sejong::Vector b(NUM_QDOT, 1);
+  UpdateModel(q_state, qdot_state, A_int, g, b);
+  last_timestep_model_update = timestep;
+
+  getB_c(q_state, qdot_state, B_int, c_int);
+  get_Jc(q_state, Jc_int);    
+
+  sejong::Vector qddot_des = (B_int*xddot_des + c_int);
+  sejong::Vector WB_des = A_int*qddot_des + b + g - Jc_int.transpose()*Fr; // Aqddot_des + b + g - J^T_c Fr = [0, tau]^T;
+
+  sejong::Vector WBC_virtual_constraints(NUM_VIRTUAL);
+  sejong::Vector tau_constraints(NUM_ACT_JOINT);
+  
+  WBC_virtual_constraints = Sv*(WB_des);
+  tau_constraints = Sa*WB_des;
+
+/*  sejong::pretty_print(WB_des, std::cout, "WB_des");
+  sejong::pretty_print(WBC_virtual_constraints, std::cout, "WBC_virtual_constraints");  
+  sejong::pretty_print(tau_constraints, std::cout, "tau_constraints");    
+*/
+  F_vec.clear();
+  // Populate F_vec, order matters here:
+  for(size_t i = 0; i < WBC_virtual_constraints.size(); i++){
+    F_vec.push_back(WBC_virtual_constraints[i]);
+  }  
+  for(size_t i = 0; i < tau_constraints.size(); i++){
+    F_vec.push_back(tau_constraints[i]);
+  }    
+}
+
+
+void Wholebody_Controller_Constraint::evaluate_sparse_A_matrix(const int &timestep, WBT_Opt_Variable_List& var_list, std::vector<double>& A, std::vector<int>& iA, std::vector<int>& jA){
+  int n = this->get_constraint_size();
+  int m = var_list.get_size_timedependent_vars(); // var_list.get_num_time_dependent_vars
+  int T = var_list.total_timesteps; // var_list.get_total_timesteps() Total timestep
+  int k = var_list.get_num_keyframe_vars();
+
+  std::cout << "[WBC Constraint] Evaluating A Matrix" << std::endl;
+
+  sejong::Matrix pre_zeroBlock(n, m*timestep); pre_zeroBlock.setZero();
+  sejong::Matrix post_zeroBlock(n, m*(T-1-timestep));  post_zeroBlock.setZero();
+  sejong::Matrix kf_zeroBlock(n, k);    kf_zeroBlock.setZero();
+
+
+  // Matrix A = [0, 0, ..., dWBC_i/dx, 0, ..., 0_{T-1-i}, 0] 
+  int local_j_offset = 0;
+  int i_local = 0;               
+  int j_local = local_j_offset;
+  // Add pre zero block:
+  std::cout << "[WBC Constraint] Constructing Pre Zero block with size: (" << pre_zeroBlock.rows() << "," << pre_zeroBlock.cols() << ")" << std::endl;
+  std::cout << "[WBC Constraint] Starting with j index: " << j_local << std::endl;  
+  for(size_t i = 0; i < pre_zeroBlock.rows(); i++){
+    for(size_t j = 0; j < pre_zeroBlock.cols(); j++){
+      A.push_back(pre_zeroBlock(i,j));
+      iA.push_back(i_local);
+      jA.push_back(j_local);
+      j_local++;
+    }
+    i_local++;
+    j_local = local_j_offset; // Reset counter    
+  }
+
+  // Add post zero block
+  local_j_offset = m*(timestep+1);
+  i_local = 0;
+  j_local = local_j_offset;
+  std::cout << "[WBC Constraint] Constructing Post Zero block with size: (" << post_zeroBlock.rows() << "," << post_zeroBlock.cols() << ")" << std::endl;
+  std::cout << "[WBC Constraint] Starting with j index: " << j_local << std::endl;  
+  for(size_t i = 0; i < post_zeroBlock.rows(); i++){
+    for(size_t j = 0; j < post_zeroBlock.cols(); j++){
+      A.push_back(post_zeroBlock(i,j));
+      iA.push_back(i_local);
+      jA.push_back(j_local);
+      j_local++;
+    }
+    i_local++;
+    j_local = local_j_offset; // Reset counter    
+  }
+
+  // Add zeros on the keyframe block
+  local_j_offset = m*T;
+  i_local = 0;
+  j_local = local_j_offset;
+
+  std::cout << "[WBC Constraint] Constructing Keyframe block with size: (" << kf_zeroBlock.rows() << "," << kf_zeroBlock.cols() << ")" << std::endl;
+  std::cout << "[WBC Constraint] Starting with j index: " << j_local << std::endl;  
+  for(size_t i = 0; i < kf_zeroBlock.rows(); i++){
+    for(size_t j = 0; j < kf_zeroBlock.cols(); j++){
+      A.push_back(kf_zeroBlock(i,j));
+      iA.push_back(i_local);
+      jA.push_back(j_local);
+      j_local++;
+    }
+    i_local++;
+    j_local = local_j_offset; // Reset counter    
+  }
+
+
+}
+
+
+
+void Wholebody_Controller_Constraint::evaluate_sparse_gradient(const int &timestep, WBT_Opt_Variable_List& var_list, std::vector<double>& G, std::vector<int>& iG, std::vector<int>& jG){
+  std::cout << "[WBC Constraint] Sparse Gradient Called" << std::endl;
+  std::cout << "[WBC Constraint]: Current Timestep " << timestep << " Last Timestep That Model was updated:" << last_timestep_model_update << std::endl;
+  if (timestep != last_timestep_model_update){
+    std::cout << "    Timestep does not match. Will update model" << std::endl;    
+    sejong::Vector q_state;
+    sejong::Vector qdot_state; 
+    var_list.get_var_states(timestep, q_state, qdot_state);    
+    sejong::Vector g(NUM_QDOT, 1);
+    sejong::Vector b(NUM_QDOT, 1);
+    UpdateModel(q_state, qdot_state, A_int, g, b);       
+    last_timestep_model_update = timestep;
+    getB_c(q_state, qdot_state, B_int, c_int);
+    get_Jc(q_state, Jc_int);    
+  }
+  int m = var_list.get_size_timedependent_vars(); // var_list.get_num_time_dependent_vars
+
+
+  // Assign Known Elements ----------------------------------------------------------------------------------------------------------
+  std::cout << "Size of Task Acceleration Vars: " << var_list.get_num_xddot_vars() <<  std::endl;
+
+  // Gradient of WBC wrt to Fr is -J_c^T
+  int local_j_offset = m*timestep + var_list.get_num_q_vars() + var_list.get_num_qdot_vars() + var_list.get_num_xddot_vars();
+  std::cout << "[WBC Constraint]: dF/dFr index j starts at: " << local_j_offset << std::endl; 
+  sejong::Matrix F_dFr = -Jc_int.transpose();  
+  int i_local = 0;               // specify i starting index
+  int j_local = local_j_offset;// j = (total_j_size*timestep) + var_states_size + task_accelerations size // specify j starting index
+  // Go through F_dFr and push back values to G, iGfun, jGfun 
+
+  for(size_t i = 0; i < F_dFr.rows(); i++){
+    for(size_t j = 0; j < F_dFr.cols(); j++){
+      //std::cout << "(i,j): " << "(" << i << "," << j << ") = " << F_dFr(i, j) << std::endl;  
+      G.push_back(F_dFr(i,j));
+      iG.push_back(i_local);
+      jG.push_back(j_local);
+      j_local++;       
+    }
+    i_local++;
+    j_local = local_j_offset; // Reset counter
+  }
+
+
+  // Gradient of WBC wrt to xddot is A*B(q)
+  // i = 0               // specify i starting index
+  // j = (total_j_size*timestep) var_states_size // specify j starting index
+  // Go through F_dxddot and push back values to G, iGfun, jGfun
+  sejong::Matrix F_dxddot = A_int*B_int;
+  local_j_offset = m*timestep + var_list.get_num_q_vars() + var_list.get_num_qdot_vars();
+  i_local = 0;
+  j_local = local_j_offset;
+  for(size_t i = 0; i < F_dxddot.rows(); i++){
+    for(size_t j = 0; j < F_dxddot.cols(); j++){
+      //std::cout << "(i,j): " << "(" << i << "," << j << ") = " << F_dxddot(i, j) << std::endl;  
+      G.push_back(F_dxddot(i,j));
+      iG.push_back(i_local);
+      jG.push_back(j_local);
+      j_local++;       
+    }
+    i_local++;
+    j_local = local_j_offset; // Reset counter
+  }
+
+
+
+  sejong::pretty_print(F_dxddot, std::cout, "F_dxddot");  
+  sejong::pretty_print(F_dFr, std::cout, "F_dFr");    
+
+}
+
+
+  // Assign 0's on elements that have no impact (key frames)
+  // i = 0
+  // j = (total_j_size*timestep) + var_states_size + task_acceleration_size + reaction_force_size
+  // sejong::Matrix zeroMat(this->get_constraint_size(), var_keyframes_size)

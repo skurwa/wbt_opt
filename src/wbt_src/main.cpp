@@ -119,9 +119,44 @@ void test_wbdc_opt_prob(){
 	WBDC_Opt wbdc_test_prob;
 
 	std::cout << "[Main] WBDC_OPT object constructed" << std::endl;
+
+	std::vector<double> F_eval;
+	wbdc_test_prob.compute_F(F_eval);
+	std::cout << "[Main] Size of F_eval:" << F_eval.size() << std::endl;
+
+	std::vector<double> G_eval;
+	std::vector<int> iGfun;
+	std::vector<int> jGvar;	
+	int neG = 0;
+	wbdc_test_prob.compute_G(G_eval, iGfun, jGvar, neG);
+
+	std::cout << "[Main] Size of (G, iG, jG)" << "(" << G_eval.size() 
+											  << "," << iGfun.size()
+											  << "," << jGvar.size() 
+											  << ")" << std::endl;
+
+	std::vector<double> A;
+	std::vector<int> iAfun;
+	std::vector<int> jAvar;	
+	int neA = 0;
+	wbdc_test_prob.compute_A(A, iAfun, jAvar, neA);
+
+
+	double result_test = 0.0;
+	wbdc_test_prob.compute_F_objective_function(result_test);	
 }
 
-void test_ptr_delete(){
+
+void test_opt_prob_ptr(){
+	std::cout << "[Main] Testing WBDC Opt Ptr "<< std::endl;
+	Optimization_Problem_Main* ptr_opt_problem = new WBDC_Opt();
+
+	int ObjRow = -1;
+	ptr_opt_problem->get_F_obj_Row(ObjRow);
+	std::cout << "[Main] Optimization name:" << ptr_opt_problem->problem_name << std::endl;
+	std::cout << "[Main] Obj Function has index:" << ObjRow << std::endl;
+
+	delete ptr_opt_problem;
 }
 
 int main(int argc, char **argv)
@@ -138,8 +173,7 @@ int main(int argc, char **argv)
 	test_wbdc_opt_prob();
 	std::cout << "[Main] WBDC_OPT object destroyed" << std::endl;
 
-	test_ptr_delete();
-
+	test_opt_prob_ptr();
 
 	return 0;
 }

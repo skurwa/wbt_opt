@@ -56,7 +56,7 @@ include_directories(${Sejong_Eigen_Path})
 
 include_directories(
 # include
-# ${catkin_INCLUDE_DIRS}
+#${catkin_INCLUDE_DIRS}
 )
 
 include_directories(include)
@@ -104,6 +104,12 @@ set(wbt_contact_sources src/wbt_src/contacts/wbt_contact_leftfoot.cpp
 
 
 set(wbt_optimization_problems_sources src/wbt_src/optimization_problems/wbt_opt_problem_wbdc.cpp)
+set(wbt_objective_func_sources src/wbt_src/objective_functions/objective_function_wbc_simple.cpp)
+
+set(wbt_snopt_wrapper_sources src/wbt_src/wbt_snopt_wrapper.cpp)
+
+
+
 
 add_executable(wbt_main src/wbt_src/main.cpp
 						${wbt_containers_sources}
@@ -112,18 +118,50 @@ add_executable(wbt_main src/wbt_src/main.cpp
 						${wbt_soft_constraint_sources}
 						${wbt_hard_constraint_sources}
 						${wbt_optimization_problems_sources}
+						${wbt_objective_func_sources}
 						${val_sim_model_sources})
-target_link_libraries(wbt_main ${catkin_LIBRARIES} ${SJUtils}
-  								  				   ${SJurdf}
-												   ${SJrbdl}
-												   ${SJsnopt})
+target_link_libraries(wbt_main ${SJUtils}
+  								${SJurdf}
+								${SJrbdl}
+								${SJsnopt})
+
+#target_link_libraries(wbt_main ${catkin_LIBRARIES} ${SJUtils}
+#  								  				   ${SJurdf}
+#												   ${SJrbdl}
+#												   ${SJsnopt})												   
 
 
 add_executable(snopt_example src/snopt_example.cpp)
-target_link_libraries(snopt_example ${catkin_LIBRARIES} ${SJUtils}
-  								  				   ${SJurdf}
-												   ${SJrbdl}
-												   ${SJsnopt})
+target_link_libraries(snopt_example ${SJUtils}
+  								  	${SJurdf}
+									${SJrbdl}
+									${SJsnopt})
+
+
+add_executable(snopt_wrapper_test src/wbt_src/tests/snopt_wrapper_test.cpp 
+								  src/wbt_src/tests/snopt_wrapper_test_main.cpp)
+target_link_libraries(snopt_wrapper_test ${SJUtils}
+  								  		 ${SJurdf}
+										 ${SJrbdl}
+										 ${SJsnopt})									
+
+
+add_executable(opt_prob_wbc_main src/wbt_src/main_opt_problem.cpp
+								 ${wbt_snopt_wrapper_sources} 				
+								 ${wbt_containers_sources}
+								 ${wbt_task_sources}
+								 ${wbt_contact_sources}
+								 ${wbt_soft_constraint_sources}
+								 ${wbt_hard_constraint_sources}
+								 ${wbt_optimization_problems_sources}
+								 ${wbt_objective_func_sources}
+								 ${val_sim_model_sources})
+
+target_link_libraries(opt_prob_wbc_main ${SJUtils}
+  										${SJurdf}
+										${SJrbdl}
+										${SJsnopt})
+
 
 add_executable(sidSimpleSnopt src/sidSimpleSnopt.cpp)
 target_link_libraries(sidSimpleSnopt ${catkin_LIBRARIES} ${SJUtils}
