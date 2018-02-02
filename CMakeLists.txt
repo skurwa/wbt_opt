@@ -28,7 +28,7 @@ val_desc
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES lcp_val_simulator
-   CATKIN_DEPENDS 
+   CATKIN_DEPENDS
        sensor_msgs
        tf
 #  DEPENDS system_lib
@@ -62,18 +62,18 @@ include_directories(
 include_directories(include)
 include_directories(src/valkyrie_dynamic_model)
 set(val_sim_model_sources src/valkyrie_dynamic_model/valkyrie_definition.h
-						  src/valkyrie_dynamic_model/Valkyrie_Dyn_Model.hpp						  
+						  src/valkyrie_dynamic_model/Valkyrie_Dyn_Model.hpp
 						  src/valkyrie_dynamic_model/Valkyrie_Dyn_Model.cpp
-						  src/valkyrie_dynamic_model/Valkyrie_Kin_Model.hpp						  
-						  src/valkyrie_dynamic_model/Valkyrie_Kin_Model.cpp						  
+						  src/valkyrie_dynamic_model/Valkyrie_Kin_Model.hpp
+						  src/valkyrie_dynamic_model/Valkyrie_Kin_Model.cpp
 						  src/valkyrie_dynamic_model/RobotModel.hpp
-						  src/valkyrie_dynamic_model/RobotModel.cpp)					
+						  src/valkyrie_dynamic_model/RobotModel.cpp)
 
 
 set(wbt_opt_sources     src/main.cpp
 						src/wbt_optimization.cpp
 						src/traj_solver.cpp
-						src/wbt_task.cpp)	
+						src/wbt_task.cpp)
 
 add_executable(traj_gen_main ${wbt_opt_sources} ${val_sim_model_sources})
 target_link_libraries(traj_gen_main ${catkin_LIBRARIES} ${SJUtils}
@@ -87,11 +87,11 @@ set(wbt_containers_sources  src/wbt_src/containers/wbt_opt_variable.cpp
 							src/wbt_src/containers/wbt_contact_list.cpp
 							src/wbt_src/containers/wbt_keyframe_list.cpp
 							src/wbt_src/containers/wbt_opt_variable_list.cpp
-							src/wbt_src/containers/wbt_constraint_list.cpp)	 
+							src/wbt_src/containers/wbt_constraint_list.cpp)
 
 set(wbt_task_sources src/wbt_src/tasks/wbt_task_com.cpp
 					 src/wbt_src/tasks/wbt_task_leftfoot.cpp
-					 src/wbt_src/tasks/wbt_task_rightfoot.cpp					 
+					 src/wbt_src/tasks/wbt_task_rightfoot.cpp
 					 src/wbt_src/tasks/wbt_task_rightfoot_righthand.cpp)
 
 set(wbt_hard_constraint_sources src/wbt_src/hard_constraints/wbt_wholebody_controller_constraint.cpp)
@@ -105,7 +105,7 @@ set(wbt_contact_sources src/wbt_src/contacts/wbt_contact_leftfoot.cpp
 
 set(wbt_optimization_problems_sources src/wbt_src/optimization_problems/wbt_opt_problem_wbdc.cpp)
 
-add_executable(wbt_main src/wbt_src/main.cpp 
+add_executable(wbt_main src/wbt_src/main.cpp
 						${wbt_containers_sources}
 						${wbt_task_sources}
 						${wbt_contact_sources}
@@ -122,6 +122,12 @@ target_link_libraries(wbt_main ${catkin_LIBRARIES} ${SJUtils}
 add_executable(snopt_example src/snopt_example.cpp)
 target_link_libraries(snopt_example ${catkin_LIBRARIES} ${SJUtils}
   								  				   ${SJurdf}
+												   ${SJrbdl}
+												   ${SJsnopt})
+
+add_executable(sidSimpleSnopt src/sidSimpleSnopt.cpp)
+target_link_libraries(sidSimpleSnopt ${catkin_LIBRARIES} ${SJUtils}
+ 								  				   ${SJurdf}
 												   ${SJrbdl}
 												   ${SJsnopt})
 
