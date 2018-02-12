@@ -81,7 +81,6 @@ target_link_libraries(traj_gen_main ${catkin_LIBRARIES} ${SJUtils}
 														   ${SJrbdl}
 														   ${SJsnopt})
 
-
 set(wbt_containers_sources  src/wbt_src/containers/wbt_opt_variable.cpp
 							src/wbt_src/containers/wbt_wholebody_task_list.cpp
 							src/wbt_src/containers/wbt_contact_list.cpp
@@ -129,7 +128,7 @@ target_link_libraries(wbt_main ${SJUtils}
 #target_link_libraries(wbt_main ${catkin_LIBRARIES} ${SJUtils}
 #  								  				   ${SJurdf}
 #												   ${SJrbdl}
-#												   ${SJsnopt})												   
+#												   ${SJsnopt})
 
 
 add_executable(snopt_example src/snopt_example.cpp)
@@ -139,16 +138,16 @@ target_link_libraries(snopt_example ${SJUtils}
 									${SJsnopt})
 
 
-add_executable(snopt_wrapper_test src/wbt_src/tests/snopt_wrapper_test.cpp 
+add_executable(snopt_wrapper_test src/wbt_src/tests/snopt_wrapper_test.cpp
 								  src/wbt_src/tests/snopt_wrapper_test_main.cpp)
 target_link_libraries(snopt_wrapper_test ${SJUtils}
   								  		 ${SJurdf}
 										 ${SJrbdl}
-										 ${SJsnopt})									
+										 ${SJsnopt})
 
 
 add_executable(opt_prob_wbc_main src/wbt_src/main_opt_problem.cpp
-								 ${wbt_snopt_wrapper_sources} 				
+								 ${wbt_snopt_wrapper_sources}
 								 ${wbt_containers_sources}
 								 ${wbt_task_sources}
 								 ${wbt_contact_sources}
@@ -169,6 +168,21 @@ target_link_libraries(sidSimpleSnopt ${catkin_LIBRARIES} ${SJUtils}
  								  				   ${SJurdf}
 												   ${SJrbdl}
 												   ${SJsnopt})
+
+add_executable(singleShotIK src/singleShotIK.cpp
+                                ${wbt_snopt_wrapper_sources}
+                                ${wbt_containers_sources}
+                                ${wbt_task_sources}
+                                ${wbt_contact_sources}
+                                ${wbt_soft_constraint_sources}
+                                ${wbt_hard_constraint_sources}
+                                ${wbt_optimization_problems_sources}
+                                ${wbt_objective_func_sources}
+                                ${val_sim_model_sources})
+target_link_libraries(singleShotIK ${catkin_LIBRARIES} ${SJUtils}
+	  					                                ${SJurdf}
+                                						${SJrbdl}
+                             						    ${SJsnopt})
 
 
 SET (THIS_PACKAGE_PATH "${PROJECT_SOURCE_DIR}/" )
